@@ -37,10 +37,10 @@ def fetch_data(tickers):
             stock = yf.Ticker(ticker)
             today_data = stock.history(period="1d", interval="1m")
             hist_data = stock.history(period="30d")
-            data[ticker] = {
-                "today": today_data,
-                "history": hist_data
-            }
+            if not today_data.empty and not hist_data.empty:
+                data[ticker] = {"today": today_data, "history": hist_data}
+            else:
+                st.warning(f"No data found for {ticker}; it may be delisted or invalid.")
         except Exception as e:
             st.error(f"Error fetching data for {ticker}: {str(e)}")
     return data
@@ -49,7 +49,10 @@ def fetch_data(tickers):
 def format_grid_data(data, stop_loss_pct, exit_trigger_pct):
     grid_data = []
     for ticker, ticker_data in data.items():
-        latest = ticker_data["today"].iloc[-1]
+        today_data = ticker_data["today"]
+        if today_data.empty:
+            continue  # Skip if no data
+        latest = today_data.iloc[-1]
         price = round(latest["Close"], 2)
         open_price = round(latest["Open"], 2)
         stop_loss_triggered = price < open_price * (1 - stop_loss_pct)
@@ -99,48 +102,45 @@ def color_price(row):
 
 # Main dashboard content
 def display_dashboard():
-    # Fetch data with the latest tickers
     data = fetch_data(st.session_state.tickers)
     
-    # Compact grid for tracking
     if data:
         grid_df = format_grid_data(data, stop_loss_pct, exit_trigger_pct)
-        
-        # Apply color formatting to the "Price" column
-        styled_grid = grid_df.style.apply(color_price, axis=1).format({
-            "Price": "{:.2f}",
-            "Open": "{:.2f}",
-            "High": "{:.2f}",
-            "Low": "{:.2f}",
-            "Change %": "{:.2f}%"
-        })
-        
-        with st.container():
-            st.subheader("Real-Time Stock/ETF Grid")
-            st.dataframe(styled_grid, use_container_width=True)
+        if not grid_df.empty:
+            styled_grid = grid_df.style.apply(color_price, axis=1).format({
+                "Price": "{:.2f}",
+                "Open": "{:.2f}",
+                "High": "{:.2f}",
+                "Low": "{:.2f}",
+                "Change %": "{:.2f}%"
+            })
+            with st.container():
+                st.subheader("Real-Time Stock/ETF Grid")
+                st.dataframe(styled_grid, use_container_width=True)
+        else:
+            st.warning("No valid data to display in the grid.")
     
-    # Detailed table and graph for selected ticker
-    selected_ticker = st.selectbox("Select a Ticker for Details", st.session_state.tickers)
+    selected_ticker = st.selectbox("Select a Ticker for Details", st.session_state.tickers, key="ticker_select")
     if selected_ticker in data:
         today_data = data[selected_ticker]["today"]
         hist_data = data[selected_ticker]["history"]
         
-        # ETF/Stock price history table
-        table_df = today_data[["Open", "High", "Low", "Close", "Volume"]].reset_index()
-        table_df.columns = ["Date", "Open", "High", "Low", "Price", "Volume"]
-        table_df["Change %"] = ((table_df["Price"] - table_df["Open"]) / table_df["Open"]) * 100
-        table_df["Date"] = table_df["Date"].dt.strftime("%m/%d/%Y %H:%M")
+        if not today_data.empty:
+            table_df = today_data[["Open", "High", "Low", "Close", "Volume"]].reset_index()
+            table_df.columns = ["Date", "Open", "High", "Low", "Price", "Volume"]
+            table_df["Change %"] = ((table_df["Price"] - table_df["Open"]) / table_df["Open"]) * 100
+            table_df["Date"] = table_df["Date"].dt.strftime("%m/%d/%Y %H:%M")
+            
+            with st.container():
+                st.subheader(f"{selected_ticker} Price History (Today)")
+                st.dataframe(table_df.tail(10), use_container_width=True)
         
-        with st.container():
-            st.subheader(f"{selected_ticker} Price History (Today)")
-            st.dataframe(table_df.tail(10), use_container_width=True)  # Show last 10 entries
-        
-        # Performance history graph
-        fig = create_performance_graph(selected_ticker, hist_data)
-        with st.container():
-            st.plotly_chart(fig, use_container_width=True)
+        if not hist_data.empty:
+            fig = create_performance_graph(selected_ticker, hist_data)
+            with st.container():
+                st.plotly_chart(fig, use_container_width=True)
 
-# Initialize last update time in session state
+# Initialize last update time
 if "last_update" not in st.session_state:
     st.session_state.last_update = time.time()
 
