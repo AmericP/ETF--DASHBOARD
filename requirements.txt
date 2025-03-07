@@ -2,3 +2,4 @@ streamlit
 yfinance
 pandas
 plotly
+matplotlib  # Added in case Matplotlib is still used elsewhere
