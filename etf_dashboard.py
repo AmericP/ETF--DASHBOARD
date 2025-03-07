@@ -5,6 +5,7 @@ import datetime
 import time
 import matplotlib.pyplot as plt
 
+
 # Streamlit UI Setup
 st.title("📈 Live Stock & ETF Tracking Dashboard")
 st.write("Track live market data with real-time updates and customizable stocks/ETFs.")
