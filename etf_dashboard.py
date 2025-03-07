@@ -1,58 +1,11 @@
-import yfinance as yf
-import pandas as pd
-import streamlit as st
-import datetime
-import time
-import matplotlib.pyplot as plt
-
-# Streamlit UI Setup
-st.title("📈 Live Stock & ETF Tracking Dashboard")
-st.write("Track live market data with real-time updates and customizable stocks/ETFs.")
-
-# Sidebar: Custom ETF Selection
-st.sidebar.header("Customize Your Watchlist")
-selected_etfs = st.sidebar.text_input("Enter tickers (comma-separated)", "QQQ, XBI, CIBR, VIG, VPU")
-etfs = [ticker.strip().upper() for ticker in selected_etfs.split(",")]
-
-# Add Additional Stocks Dynamically
-st.sidebar.header("🔍 Add More Stocks/ETFs")
-new_stock = st.sidebar.text_input("Enter a stock/ETF ticker to track", "")
-
-# If user adds a stock, update list
-if new_stock:
-    if new_stock.upper() not in etfs:
-        etfs.append(new_stock.upper())
-        st.sidebar.success(f"✅ {new_stock.upper()} added to watchlist!")
+# Function to apply color formatting to Price based on Open value
+def highlight_price(row):
+    if row["Price"] > row["Open"]:
+        return ["color: green"] * len(row)
     else:
-        st.sidebar.warning(f"⚠️ {new_stock.upper()} is already being tracked.")
+        return ["color: red"] * len(row)
 
-# Timeframe Selection
-st.sidebar.header("Select Timeframe")
-timeframe = st.sidebar.selectbox("View Data For", ["Daily", "Weekly", "Monthly"])
-
-# Function to fetch historical data
-def get_etf_data(etf, period="1mo", interval="1d"):
-    try:
-        ticker = yf.Ticker(etf)
-        hist = ticker.history(period=period, interval=interval)
-        if hist.empty:
-            st.warning(f"⚠️ No data found for {etf}. It may be an invalid ticker or unavailable.")
-            return None
-        hist["% Change"] = hist["Close"].pct_change() * 100
-        return hist.dropna()
-    except Exception as e:
-        st.warning(f"⚠️ Error fetching data for {etf}: {e}")
-        return None
-
-# Map timeframe selection to Yahoo Finance intervals
-timeframe_map = {
-    "Daily": ("1mo", "1d"),
-    "Weekly": ("3mo", "1wk"),
-    "Monthly": ("6mo", "1mo")
-}
-selected_period, selected_interval = timeframe_map[timeframe]
-
-# **Display ETF Price History**
+# Display ETF Price History
 st.subheader("📊 Stock & ETF Price History")
 
 for etf in etfs:
@@ -64,47 +17,11 @@ for etf in etfs:
         df_display.insert(0, "Date", df.index.date)
         df_display.rename(columns={"Close": "Price"}, inplace=True)
 
-        # Apply color formatting to Price based on Open value
-        def highlight_price(val, open_val):
-            return f"color: {'green' if val > open_val else 'red'}"
+        # Ensure DataFrame is not empty before applying style
+        if not df_display.empty:
+            df_styled = df_display.style.apply(highlight_price, axis=1)
 
-        df_styled = df_display.style.apply(lambda x: [highlight_price(v, x["Open"]) for v in x["Price"]], axis=1)
-
-        # Display table
-        st.dataframe(df_styled)
-
-# **Plot Stock & ETF Performance**
-st.subheader("📉 Performance Graph")
-st.write("Select Stocks/ETFs to visualize price trends.")
-selected_plot_etfs = st.multiselect("Choose Stocks/ETFs", etfs, default=etfs)
-
-plt.figure(figsize=(10,5))
-for etf in selected_plot_etfs:
-    df = get_etf_data(etf, selected_period, selected_interval)
-    if df is not None and not df.empty:
-        plt.plot(df.index, df["Close"], label=etf)
-
-plt.xlabel("Date")
-plt.ylabel("Price ($)")
-plt.legend()
-plt.grid()
-st.pyplot(plt)
-
-# Stop-Loss & Take-Profit Monitoring
-st.subheader("⚠️ Stop-Loss & Take-Profit Alerts")
-
-for etf in etfs:
-    df = get_etf_data(etf, selected_period, selected_interval)
-    if df is not None and not df.empty:
-        stop_loss = df["Close"].iloc[-1] * 0.90  # 10% below last price
-        take_profit = df["Close"].iloc[-1] * 1.20  # 20% above last price
-        latest_price = df["Close"].iloc[-1]
-
-        if latest_price <= stop_loss:
-            st.warning(f"🚨 {etf} hit Stop-Loss at ${stop_loss:.2f}!")
-        elif latest_price >= take_profit:
-            st.success(f"✅ {etf} hit Take-Profit at ${take_profit:.2f}!")
-
-st.write("🔄 **Auto-refreshing every 5 minutes** and resetting daily at midnight.")
-time.sleep(300)
-st.experimental_rerun()  # Auto-refresh every 5 minutes
+            # Display styled table
+            st.dataframe(df_styled)
+        else:
+            st.warning(f"⚠️ No data available for {etf}.")
