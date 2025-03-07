@@ -18,21 +18,23 @@ def get_etf_data(etf, period="1mo", interval="1d"):
     try:
         ticker = yf.Ticker(etf)
         hist = ticker.history(period=period, interval=interval)
-        
+
         if hist.empty:
             return None
         
-        # Calculate Change %
+        # Add % Change column
         hist["% Change"] = hist["Close"].pct_change() * 100
 
-        # Keep only relevant columns
-        hist = hist[["Open", "Close", "High", "Low", "Volume", "% Change"]]
+        # Keep only relevant columns and rename 'Close' to 'Price'
+        hist = hist[["Open", "Close", "High", "Low", "Volume", "% Change"]].copy()
+        hist.rename(columns={"Close": "Price"}, inplace=True)
 
         # Abbreviate date format
         hist.index = hist.index.strftime("%b %d")  # Example: "Mar 07"
 
         return hist.dropna()
-    except Exception:
+    except Exception as e:
+        st.error(f"⚠️ Error fetching data for {etf}: {e}")
         return None
 
 # **Stock & ETF Price Grid**
@@ -40,10 +42,10 @@ st.subheader("📊 Watchlist Prices")
 
 grid_data = []
 for etf in etfs:
-    df = get_etf_data(etf, "1d", "1h")  # Fetch intraday data for the latest price
+    df = get_etf_data(etf, "1d", "1h")  # Fetch intraday data for latest price
     if df is not None and not df.empty:
         latest = df.iloc[-1]
-        grid_data.append([etf, latest["Close"], latest["% Change"]])
+        grid_data.append([etf, latest["Price"], latest["% Change"]])
 
 # Convert to DataFrame & Display Grid
 if grid_data:
@@ -61,7 +63,6 @@ for etf in etfs:
     if df is not None and not df.empty:
         df_display = df.copy()
         df_display.insert(0, "Date", df.index)
-        df_display.rename(columns={"Close": "Price"}, inplace=True)
 
         # Apply Color Formatting
         def highlight_price(val, open_val):
@@ -72,7 +73,7 @@ for etf in etfs:
         st.write(f"📌 **{etf}**")
         st.dataframe(df_styled)
     else:
-        st.warning(f"⚠️ No data available for {etf}.")
+        st.warning(f"⚠️ No available data for {etf}.")
 
 # **ETF Performance Over Time (Graph)**
 st.subheader("📉 Performance Chart")
