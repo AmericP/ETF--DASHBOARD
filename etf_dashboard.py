@@ -4,7 +4,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import time
-import matplotlib.pyplot as plt
 
 # Streamlit page configuration
 st.set_page_config(page_title="Stock/ETF Live Monitoring Dashboard", layout="wide")
@@ -24,8 +23,9 @@ if st.sidebar.button("Add Ticker") and new_ticker:
     new_ticker = new_ticker.strip().upper()
     if new_ticker not in st.session_state.tickers:
         st.session_state.tickers.append(new_ticker)
+        st.success(f"Added {new_ticker} to tracking list!")
 
-update_interval = 300  # Fixed 5 minutes (300 seconds)
+update_interval = 300  # 5 minutes in seconds
 stop_loss_pct = st.sidebar.slider("Stop-Loss Trigger (% below Open)", 1, 10, 5) / 100
 exit_trigger_pct = st.sidebar.slider("Exit Trigger (% above Open)", 1, 20, 10) / 100
 
@@ -74,7 +74,7 @@ def create_performance_graph(ticker, hist_data):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=hist_data.index,
-        y=hist_data["Close"],  # Fixed: Use "Close" instead of "Price"
+        y=hist_data["Close"],
         mode="lines",
         name=f"{ticker} Price",
         line=dict(color="blue")
@@ -87,28 +87,26 @@ def create_performance_graph(ticker, hist_data):
     )
     return fig
 
-# Function to color the grid based on price change
+# Function to color the "Price" column based on price change
 def color_price(row):
+    styles = [""] * len(row)
+    price_idx = row.index.get_loc("Price")
     if row["Price"] > row["Open"]:
-        return ["background-color: #90EE90"] * len(row)
-    elif row["Price"] < row["Open"]:  # Fixed: Use row["Open"] instead of open_price
-        return ["background-color: #FFB6C1"] * len(row)
-    return [""] * len(row)
+        styles[price_idx] = "color: green"
+    elif row["Price"] < row["Open"]:
+        styles[price_idx] = "color: red"
+    return styles
 
-# Main dashboard loop
-placeholder_grid = st.empty()
-placeholder_table = st.empty()
-placeholder_graph = st.empty()
-
-while True:
-    # Fetch data
+# Main dashboard content
+def display_dashboard():
+    # Fetch data with the latest tickers
     data = fetch_data(st.session_state.tickers)
     
     # Compact grid for tracking
     if data:
         grid_df = format_grid_data(data, stop_loss_pct, exit_trigger_pct)
         
-        # Apply color formatting
+        # Apply color formatting to the "Price" column
         styled_grid = grid_df.style.apply(color_price, axis=1).format({
             "Price": "{:.2f}",
             "Open": "{:.2f}",
@@ -117,7 +115,7 @@ while True:
             "Change %": "{:.2f}%"
         })
         
-        with placeholder_grid.container():
+        with st.container():
             st.subheader("Real-Time Stock/ETF Grid")
             st.dataframe(styled_grid, use_container_width=True)
     
@@ -133,14 +131,28 @@ while True:
         table_df["Change %"] = ((table_df["Price"] - table_df["Open"]) / table_df["Open"]) * 100
         table_df["Date"] = table_df["Date"].dt.strftime("%m/%d/%Y %H:%M")
         
-        with placeholder_table.container():
+        with st.container():
             st.subheader(f"{selected_ticker} Price History (Today)")
             st.dataframe(table_df.tail(10), use_container_width=True)  # Show last 10 entries
         
         # Performance history graph
         fig = create_performance_graph(selected_ticker, hist_data)
-        with placeholder_graph.container():
+        with st.container():
             st.plotly_chart(fig, use_container_width=True)
-    
-    # Auto-refresh
-    time.sleep(update_interval)
+
+# Initialize last update time in session state
+if "last_update" not in st.session_state:
+    st.session_state.last_update = time.time()
+
+# Display the dashboard
+display_dashboard()
+
+# Auto-refresh logic
+current_time = time.time()
+if current_time - st.session_state.last_update >= update_interval:
+    st.session_state.last_update = current_time
+    st.rerun()
+
+# Display next refresh countdown
+seconds_until_refresh = int(update_interval - (current_time - st.session_state.last_update))
+st.sidebar.write(f"Next refresh in {seconds_until_refresh} seconds")
