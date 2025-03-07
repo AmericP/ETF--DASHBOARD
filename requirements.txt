@@ -1,5 +1,4 @@
-streamlit
-yfinance
-pandas
-plotly
-matplotlib  # Added in case Matplotlib is still used elsewhere
+streamlit==1.43.0
+yfinance==0.2.54
+pandas==2.2.3
+plotly==6.0.0
