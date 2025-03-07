@@ -5,7 +5,6 @@ import datetime
 import time
 import matplotlib.pyplot as plt
 
-
 # Streamlit UI Setup
 st.title("📈 Live Stock & ETF Tracking Dashboard")
 st.write("Track live market data with real-time updates and customizable stocks/ETFs.")
@@ -24,15 +23,17 @@ def get_etf_data(etf, period="1mo", interval="1d"):
     try:
         ticker = yf.Ticker(etf)
         hist = ticker.history(period=period, interval=interval)
-
-        # DEBUGGING: Print fetched data
-        st.write(f"Debug Data for {etf} (first 5 rows):")
-        st.write(hist.head())
-
+        
         if hist.empty:
             st.warning(f"⚠️ No data found for {etf}. It may be an invalid ticker or unavailable.")
             return None
+        
+        # Add % Change column
         hist["% Change"] = hist["Close"].pct_change() * 100
+
+        # Select relevant columns and remove unwanted ones
+        hist = hist[["Open", "Close", "High", "Low", "% Change"]]
+        
         return hist.dropna()
     except Exception as e:
         st.error(f"❌ Error fetching data for {etf}: {e}")
@@ -54,30 +55,31 @@ for etf in etfs:
     df = get_etf_data(etf, selected_period, selected_interval)
     
     if df is not None and not df.empty:
-        df_display = df[["Open", "Close", "High", "Low", "Volume", "% Change"]].copy()
+        df_display = df.copy()
         df_display.insert(0, "Date", df.index.date)
         df_display.rename(columns={"Close": "Price"}, inplace=True)
 
-        # Display table
+        # Display cleaned table
         st.dataframe(df_display)
     else:
         st.warning(f"⚠️ No available data for {etf}. Please check the ticker symbol.")
 
-# **Plot Stock & ETF Performance**
-st.subheader("📉 Performance Graph")
-st.write("Select Stocks/ETFs to visualize price trends.")
+# **Enhanced Performance Graph**
+st.subheader("📉 ETF Performance Over Time")
+st.write("Select Stocks/ETFs to visualize trends.")
 selected_plot_etfs = st.multiselect("Choose Stocks/ETFs", etfs, default=etfs)
 
-plt.figure(figsize=(10,5))
+plt.figure(figsize=(12, 6))
 for etf in selected_plot_etfs:
     df = get_etf_data(etf, selected_period, selected_interval)
     if df is not None and not df.empty:
-        plt.plot(df.index, df["Close"], label=etf)
+        plt.plot(df.index, df["Price"], label=etf, linewidth=2)
 
 plt.xlabel("Date")
 plt.ylabel("Price ($)")
+plt.title("ETF Price Trends Over Time")
 plt.legend()
-plt.grid()
+plt.grid(True, linestyle="--", alpha=0.5)
 st.pyplot(plt)
 
 st.write("🔄 **Auto-refreshing every 5 minutes** and resetting daily at midnight.")
