@@ -1,22 +1,17 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import datetime
-import time
 import matplotlib.pyplot as plt
+import time
 
 # Streamlit UI Setup
 st.title("📈 Live Stock & ETF Tracking Dashboard")
-st.write("Track live market data with real-time updates and customizable stocks/ETFs.")
+st.write("Monitor real-time stock & ETF prices with performance tracking.")
 
-# Sidebar: Custom ETF Selection
-st.sidebar.header("Customize Your Watchlist")
+# Sidebar: Custom Stock & ETF Selection
+st.sidebar.header("📌 Watchlist")
 selected_etfs = st.sidebar.text_input("Enter tickers (comma-separated)", "QQQ, XBI, CIBR, VIG, VPU")
 etfs = [ticker.strip().upper() for ticker in selected_etfs.split(",")]
-
-# Timeframe Selection
-st.sidebar.header("Select Timeframe")
-timeframe = st.sidebar.selectbox("View Data For", ["Daily", "Weekly", "Monthly"])
 
 # Function to fetch historical data
 def get_etf_data(etf, period="1mo", interval="1d"):
@@ -25,53 +20,66 @@ def get_etf_data(etf, period="1mo", interval="1d"):
         hist = ticker.history(period=period, interval=interval)
         
         if hist.empty:
-            st.warning(f"⚠️ No data found for {etf}. It may be an invalid ticker or unavailable.")
             return None
         
-        # Add % Change column
+        # Calculate Change %
         hist["% Change"] = hist["Close"].pct_change() * 100
 
-        # Select relevant columns and remove unwanted ones
-        hist = hist[["Open", "Close", "High", "Low", "% Change"]]
-        
+        # Keep only relevant columns
+        hist = hist[["Open", "Close", "High", "Low", "Volume", "% Change"]]
+
+        # Abbreviate date format
+        hist.index = hist.index.strftime("%b %d")  # Example: "Mar 07"
+
         return hist.dropna()
-    except Exception as e:
-        st.error(f"❌ Error fetching data for {etf}: {e}")
+    except Exception:
         return None
 
-# Map timeframe selection to Yahoo Finance intervals
-timeframe_map = {
-    "Daily": ("1mo", "1d"),
-    "Weekly": ("3mo", "1wk"),
-    "Monthly": ("6mo", "1mo")
-}
-selected_period, selected_interval = timeframe_map[timeframe]
+# **Stock & ETF Price Grid**
+st.subheader("📊 Watchlist Prices")
 
-# **Display ETF Price History**
-st.subheader("📊 Stock & ETF Price History")
+grid_data = []
+for etf in etfs:
+    df = get_etf_data(etf, "1d", "1h")  # Fetch intraday data for the latest price
+    if df is not None and not df.empty:
+        latest = df.iloc[-1]
+        grid_data.append([etf, latest["Close"], latest["% Change"]])
+
+# Convert to DataFrame & Display Grid
+if grid_data:
+    df_grid = pd.DataFrame(grid_data, columns=["Symbol", "Last Price ($)", "Change %"])
+    st.dataframe(df_grid.style.format({"Last Price ($)": "{:.2f}", "Change %": "{:.2f}%"}))
+else:
+    st.warning("⚠️ No data available. Check ticker symbols.")
+
+# **ETF Price History Table**
+st.subheader("📜 Price History")
 
 for etf in etfs:
-    st.write(f"**{etf} Performance Data**")
-    df = get_etf_data(etf, selected_period, selected_interval)
+    df = get_etf_data(etf, "1mo", "1d")
     
     if df is not None and not df.empty:
         df_display = df.copy()
-        df_display.insert(0, "Date", df.index.date)
+        df_display.insert(0, "Date", df.index)
         df_display.rename(columns={"Close": "Price"}, inplace=True)
 
-        # Display cleaned table
-        st.dataframe(df_display)
-    else:
-        st.warning(f"⚠️ No available data for {etf}. Please check the ticker symbol.")
+        # Apply Color Formatting
+        def highlight_price(val, open_val):
+            return f"color: {'green' if val > open_val else 'red'}"
 
-# **Enhanced Performance Graph**
-st.subheader("📉 ETF Performance Over Time")
-st.write("Select Stocks/ETFs to visualize trends.")
-selected_plot_etfs = st.multiselect("Choose Stocks/ETFs", etfs, default=etfs)
+        df_styled = df_display.style.apply(lambda x: [highlight_price(v, x["Open"]) for v in x["Price"]], axis=1)
+
+        st.write(f"📌 **{etf}**")
+        st.dataframe(df_styled)
+    else:
+        st.warning(f"⚠️ No data available for {etf}.")
+
+# **ETF Performance Over Time (Graph)**
+st.subheader("📉 Performance Chart")
 
 plt.figure(figsize=(12, 6))
-for etf in selected_plot_etfs:
-    df = get_etf_data(etf, selected_period, selected_interval)
+for etf in etfs:
+    df = get_etf_data(etf, "1mo", "1d")
     if df is not None and not df.empty:
         plt.plot(df.index, df["Price"], label=etf, linewidth=2)
 
