@@ -25,6 +25,15 @@ if st.sidebar.button("Add Ticker") and new_ticker:
         st.session_state.tickers.append(new_ticker)
         st.success(f"Added {new_ticker} to tracking list!")
 
+# Add removal functionality
+remove_ticker = st.sidebar.selectbox("Select Ticker to Remove", st.session_state.tickers)
+if st.sidebar.button("Remove Ticker") and remove_ticker:
+    if remove_ticker in st.session_state.tickers:
+        st.session_state.tickers.remove(remove_ticker)
+        st.success(f"Removed {remove_ticker} from tracking list!")
+        # Force a rerun to update the dashboard immediately
+        st.rerun()
+
 update_interval = 300  # 5 minutes in seconds
 stop_loss_pct = st.sidebar.slider("Stop-Loss Trigger (% below Open)", 1, 10, 5) / 100
 exit_trigger_pct = st.sidebar.slider("Exit Trigger (% above Open)", 1, 20, 10) / 100
@@ -120,25 +129,29 @@ def display_dashboard():
         else:
             st.warning("No valid data to display in the grid.")
     
-    selected_ticker = st.selectbox("Select a Ticker for Details", st.session_state.tickers, key="ticker_select")
-    if selected_ticker in data:
-        today_data = data[selected_ticker]["today"]
-        hist_data = data[selected_ticker]["history"]
-        
-        if not today_data.empty:
-            table_df = today_data[["Open", "High", "Low", "Close", "Volume"]].reset_index()
-            table_df.columns = ["Date", "Open", "High", "Low", "Price", "Volume"]
-            table_df["Change %"] = ((table_df["Price"] - table_df["Open"]) / table_df["Open"]) * 100
-            table_df["Date"] = table_df["Date"].dt.strftime("%m/%d/%Y %H:%M")
+    # Ensure selected_ticker exists in current tickers list
+    if st.session_state.tickers:
+        selected_ticker = st.selectbox("Select a Ticker for Details", st.session_state.tickers, key="ticker_select")
+        if selected_ticker in data:
+            today_data = data[selected_ticker]["today"]
+            hist_data = data[selected_ticker]["history"]
             
-            with st.container():
-                st.subheader(f"{selected_ticker} Price History (Today)")
-                st.dataframe(table_df.tail(10), use_container_width=True)
-        
-        if not hist_data.empty:
-            fig = create_performance_graph(selected_ticker, hist_data)
-            with st.container():
-                st.plotly_chart(fig, use_container_width=True)
+            if not today_data.empty:
+                table_df = today_data[["Open", "High", "Low", "Close", "Volume"]].reset_index()
+                table_df.columns = ["Date", "Open", "High", "Low", "Price", "Volume"]
+                table_df["Change %"] = ((table_df["Price"] - table_df["Open"]) / table_df["Open"]) * 100
+                table_df["Date"] = table_df["Date"].dt.strftime("%m/%d/%Y %H:%M")
+                
+                with st.container():
+                    st.subheader(f"{selected_ticker} Price History (Today)")
+                    st.dataframe(table_df.tail(10), use_container_width=True)
+            
+            if not hist_data.empty:
+                fig = create_performance_graph(selected_ticker, hist_data)
+                with st.container():
+                    st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No tickers available to display. Please add some tickers.")
 
 # Initialize last update time
 if "last_update" not in st.session_state:
