@@ -2,8 +2,9 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, time
+from datetime import datetime
 import time
+import matplotlib.pyplot as plt
 
 # Streamlit page configuration
 st.set_page_config(page_title="Stock/ETF Live Monitoring Dashboard", layout="wide")
@@ -51,7 +52,6 @@ def format_grid_data(data, stop_loss_pct, exit_trigger_pct):
         latest = ticker_data["today"].iloc[-1]
         price = round(latest["Close"], 2)
         open_price = round(latest["Open"], 2)
-        # Add stop-loss and exit trigger logic
         stop_loss_triggered = price < open_price * (1 - stop_loss_pct)
         exit_triggered = price > open_price * (1 + exit_trigger_pct)
         grid_row = {
@@ -74,7 +74,7 @@ def create_performance_graph(ticker, hist_data):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=hist_data.index,
-        y=hist_data["Close"],
+        y=hist_data["Close"],  # Fixed: Use "Close" instead of "Price"
         mode="lines",
         name=f"{ticker} Price",
         line=dict(color="blue")
@@ -91,7 +91,7 @@ def create_performance_graph(ticker, hist_data):
 def color_price(row):
     if row["Price"] > row["Open"]:
         return ["background-color: #90EE90"] * len(row)
-    elif row["Price"] < open_price:
+    elif row["Price"] < row["Open"]:  # Fixed: Use row["Open"] instead of open_price
         return ["background-color: #FFB6C1"] * len(row)
     return [""] * len(row)
 
